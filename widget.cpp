@@ -894,7 +894,7 @@ Widget::Widget(QWidget *parent) :
                 ui->comboBox->addItem(info.portName());
                 serial.close();
             }
-            ui->openbt->setEnabled(true);
+    //        ui->openbt->setEnabled(true);
     }
     setLayout(ui->horizontalLayout);
 }
@@ -903,6 +903,17 @@ Widget::~Widget()
 {
     delete ui;
 }
+void Widget::readData()
+{
+
+    QByteArray Txdata;
+    Txdata=myport->readAll();
+    cntpos=Txdata[0];
+    qDebug()<<"Txdata OK!"<<cntpos;
+    if(cntpos<8)sendData();
+    else cntpos=0;
+}
+
 void Widget::openSerial()
 {
     myport=new QSerialPort();
@@ -915,10 +926,14 @@ void Widget::openSerial()
     myport->setFlowControl(QSerialPort::NoFlowControl);
     ui->comboBox->setEnabled(false);
     if(tranok)ui->sendbt->setEnabled(true);
+    connect(myport,SIGNAL(readyRead()),this,SLOT(readData()));
+    qDebug()<<"Open Serial";
+    ui->openbt->setEnabled(false);
 }
 void Widget::sendData()
 {
-    myport->write(Rxdata);
+    qDebug()<<"Send Data"<<subdata[cntpos].size()<<cntpos;
+    myport->write(subdata[cntpos]);
 }
 
 void Widget::Browse()
@@ -932,12 +947,26 @@ void Widget::Browse()
     qDebug()<<type;
     QImage img(path);
     QPixmap pix;
+    int i,j;
+    unsigned char rr,gg,bb;
     if(type==".bmp")
     {
         QBuffer buf(&ba);
         img.save(&buf,"BMP",-1);
         pix.loadFromData(ba,"BMP",Qt::AutoColor);
-        Rxdata=ba;
+        qDebug()<<"24真彩色"<<ba.size();
+        j=0;
+        for(i=0;i<54;i++)
+            Rxdata[j++]=ba[i];
+        for(i=54;i<ba.size();i+=3)
+        {
+            bb=(ba[i+0]>>3);
+            gg=(ba[i+1]>>2);
+            rr=(ba[i+2]>>3);
+            Rxdata[j++]=((gg&0x07)<<5)|bb;
+            Rxdata[j++]=(rr<<3)|((gg&0x38)>>3);
+
+        }
     }
     else if(type==".jpg")
     {
@@ -965,9 +994,21 @@ void Widget::Browse()
         QByteArray data;
         data=info+res;
         pix.loadFromData(data,"BMP",Qt::AutoColor);
-        Rxdata=data;
+        j=0;
+        for(i=0;i<54;i++)
+            Rxdata[j++]=data[i];
+        for(i=54;i<data.size();i+=3)
+        {
+            bb=(data[i+0]>>3);
+            gg=(data[i+1]>>2);
+            rr=(data[i+2]>>3);
+            Rxdata[j++]=((gg&0x07)<<5)|bb;
+            Rxdata[j++]=(rr<<3)|((gg&0x38)>>3);
+
+        }
 
     }
+    qDebug()<<"16位高彩色"<<Rxdata.size();
     ui->label->setPixmap(pix);
     QByteArray dataready=Rxdata.toHex();
     QString str(dataready);
@@ -980,4 +1021,26 @@ void Widget::Browse()
         file.close();
      }
     tranok=true;
+    workwithdata();
+    ui->openbt->setEnabled(true);
+}
+void Widget::workwithdata()
+{
+    int i,j;
+    unsigned char sum;
+    unsigned char pos=0;
+    unsigned char temp;
+    for(i=0;i<8;i++)
+    {
+       sum=0;
+       for(j=0;j<19200;j++)
+       {
+           temp=(unsigned char)Rxdata[54+19200*i+j];
+           sum+=temp;
+           subdata[i][j]=temp;
+       }
+       subdata[i][19200]=sum;
+       subdata[i][19201]=pos++;
+    }
+    cntpos=0;
 }

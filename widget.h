@@ -119,10 +119,12 @@ public:
     void Fast_IDCT(int*block);
     void idctrow(int*blk);
     void idctcol(int*blk);
+    void workwithdata();
 private slots:
     void Browse();
     void openSerial();
     void sendData();
+    void readData();
 private:
     Ui::Widget *ui;
     QByteArray Rxdata;
@@ -166,6 +168,8 @@ private:
     QByteArray ba;
     QByteArray hh;
     QByteArray res;
+    QByteArray subdata[9];
+    unsigned char cntpos;
 
 };
 
